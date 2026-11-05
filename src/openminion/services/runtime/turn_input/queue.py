@@ -640,29 +640,24 @@ class TurnInputQueue:
                         "The steering batch state changed before transition.",
                         {"queue_id": entry.queue_id, "status": entry.status.value},
                     )
-            now = _utc_now_iso()
+            completed = target_status == TurnInputQueueStatus.COMPLETED
+            completed_at = _utc_now_iso() if completed else None
+            event_type = QUEUE_EVENT_COMPLETED if completed else QUEUE_EVENT_REQUEUED
             updated_by_id: dict[str, TurnInputQueueEntry] = {}
             for queue_id in dict.fromkeys(requested_ids):
                 index, entry = matches[queue_id]
                 updated = replace(
                     entry,
                     status=target_status,
-                    completed_at=(
-                        now if target_status == TurnInputQueueStatus.COMPLETED else None
-                    ),
+                    completed_at=completed_at,
                     status_version=entry.status_version + 1,
                 )
                 self._entries[index] = updated
                 updated_by_id[queue_id] = updated
-                if target_status == TurnInputQueueStatus.COMPLETED:
+                if completed:
                     self._completed_steering[queue_id] = updated
                 else:
                     self._completed_steering.pop(queue_id, None)
-                event_type = (
-                    QUEUE_EVENT_COMPLETED
-                    if target_status == TurnInputQueueStatus.COMPLETED
-                    else QUEUE_EVENT_REQUEUED
-                )
                 self._emit(event_type, updated.event_payload())
             return [updated_by_id[queue_id] for queue_id in requested_ids]
 
